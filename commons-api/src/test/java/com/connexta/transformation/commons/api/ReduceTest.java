@@ -11,11 +11,11 @@
  * License is distributed along with this program and can be found at
  * <http://www.gnu.org/licenses/lgpl.html>.
  */
-package com.connexta.transformation.commons.api.status;
+package com.connexta.transformation.commons.api;
 
 import static org.junit.Assert.assertEquals;
 
-import com.connexta.transformation.commons.api.status.TransformationStatus.State;
+import com.connexta.transformation.commons.api.TransformationStatus.State;
 import java.util.Arrays;
 import java.util.Collection;
 import org.junit.Test;

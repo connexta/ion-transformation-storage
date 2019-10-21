@@ -14,15 +14,17 @@
 package com.connexta.transformation.commons.inmemory;
 
 import com.connexta.transformation.commons.api.ErrorCode;
+import com.connexta.transformation.commons.api.MetadataTransformation;
 import com.connexta.transformation.commons.api.RequestInfo;
-import com.connexta.transformation.commons.api.status.MetadataTransformation;
+import com.connexta.transformation.commons.api.exceptions.PersistenceException;
+import com.connexta.transformation.commons.api.impl.AbstractMetadataImpl;
+import com.connexta.transformation.pojo.MetadataPojo;
 import com.google.common.io.ByteStreams;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.Instant;
 import java.util.Optional;
-import java.util.OptionalLong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,21 +33,12 @@ import org.slf4j.LoggerFactory;
  * contents of the metadata will be stored as an array of bytes. All of the state that would change
  * during the lifecycle of this object is threadsafe and kept in sync.
  */
-public class InMemoryMetadataTransformation implements MetadataTransformation {
+public class InMemoryMetadataTransformation extends AbstractMetadataImpl {
   private static final Logger LOGGER =
       LoggerFactory.getLogger(InMemoryMetadataTransformation.class);
   private final InMemoryTransformation transformation;
   private final Object stateLock = new Object();
-  private final String metadataType;
-  private final String transformId;
-  private final RequestInfo requestInfo;
-  private final Instant startTime;
-  private Instant completionTime;
-  private byte[] content;
-  private String contentType;
-  private State state;
-  private ErrorCode failureReason;
-  private String failureMessage;
+  private volatile byte[] content;
 
   /**
    * Sets the state to "In progress" and initializes the start time.
@@ -60,12 +53,23 @@ public class InMemoryMetadataTransformation implements MetadataTransformation {
       String metadataType,
       String transformId,
       RequestInfo requestInfo) {
+    super(metadataType, transformId, requestInfo, transformation.getClock());
     this.transformation = transformation;
-    this.startTime = Instant.now();
-    this.state = State.IN_PROGRESS;
-    this.metadataType = metadataType;
-    this.transformId = transformId;
-    this.requestInfo = requestInfo;
+  }
+
+  /**
+   * Instantiates an in-memory metadata based on the information provided by the specified pojo.
+   *
+   * @param pojo the pojo to initializes the metadata with
+   * @param transformation the associated transformation
+   * @throws com.connexta.transformation.commons.api.exceptions.InvalidFieldException if an error
+   *     occurs while trying to deserialize the pojo object
+   * @throws PersistenceException if an error occurs while deserializing the pojo object
+   */
+  public InMemoryMetadataTransformation(MetadataPojo pojo, InMemoryTransformation transformation)
+      throws PersistenceException {
+    super(pojo, transformation.getClock());
+    this.transformation = transformation;
   }
 
   @Override
@@ -74,119 +78,54 @@ public class InMemoryMetadataTransformation implements MetadataTransformation {
   }
 
   @Override
-  public String getMetadataType() {
-    return metadataType;
-  }
-
-  @Override
   public Optional<InputStream> getContent() {
     checkForDeletion();
-    synchronized (stateLock) {
-      if (content == null) {
-        return Optional.empty();
-      } else {
-        return Optional.of(new ByteArrayInputStream(content));
-      }
-    }
-  }
+    final byte[] c = content;
 
-  @Override
-  public Optional<String> getContentType() {
-    synchronized (stateLock) {
-      return Optional.ofNullable(contentType);
-    }
-  }
-
-  @Override
-  public OptionalLong getContentLength() {
-    synchronized (stateLock) {
-      if (content == null) {
-        return OptionalLong.empty();
-      } else {
-        return OptionalLong.of(content.length);
-      }
+    if (c == null) {
+      return Optional.empty();
+    } else {
+      return Optional.of(new ByteArrayInputStream(content));
     }
   }
 
   @Override
   public void succeed(String contentType, InputStream contentStream) throws IOException {
     checkForDeletion();
-    Instant now = Instant.now();
+    final Instant now = Instant.ofEpochMilli(clock.wallTime());
 
     synchronized (stateLock) {
       checkForCompletion();
       try {
-        content = ByteStreams.toByteArray(contentStream);
+        this.content = ByteStreams.toByteArray(contentStream);
       } finally {
         try {
           contentStream.close();
         } catch (IOException e) {
           LOGGER.debug(
               "Unable to close contents stream of [{}] metadata for transformation [{}].",
-              metadataType,
-              transformId);
+              getMetadataType(),
+              getTransformId());
         }
       }
-      this.state = State.SUCCESSFUL;
-      this.contentType = contentType;
-      this.completionTime = now;
+      super.contentLength = content.length;
+      super.contentType = contentType;
+      super.completionTime = now;
+      super.state = State.SUCCESSFUL;
     }
   }
 
   @Override
   public void fail(ErrorCode reason, String message) {
     checkForDeletion();
-    Instant now = Instant.now();
+    final Instant now = Instant.ofEpochMilli(clock.wallTime());
 
     synchronized (stateLock) {
       checkForCompletion();
-      state = State.FAILED;
-      failureReason = reason;
-      failureMessage = message;
-      this.completionTime = now;
-    }
-  }
-
-  @Override
-  public Optional<ErrorCode> getFailureReason() {
-    synchronized (stateLock) {
-      return Optional.ofNullable(failureReason);
-    }
-  }
-
-  @Override
-  public Optional<String> getFailureMessage() {
-    synchronized (stateLock) {
-      return Optional.ofNullable(failureMessage);
-    }
-  }
-
-  @Override
-  public String getTransformId() {
-    return transformId;
-  }
-
-  @Override
-  public RequestInfo getRequestInfo() {
-    return requestInfo;
-  }
-
-  @Override
-  public Instant getStartTime() {
-    return startTime;
-  }
-
-  @Override
-  public Optional<Instant> getCompletionTime() {
-    synchronized (stateLock) {
-      return Optional.ofNullable(completionTime);
-    }
-  }
-
-  @Override
-  public State getState() {
-    synchronized (stateLock) {
-      return state;
+      super.failureReason = reason;
+      super.failureMessage = message;
+      super.completionTime = now;
+      super.state = State.FAILED;
     }
   }
 
@@ -194,9 +133,9 @@ public class InMemoryMetadataTransformation implements MetadataTransformation {
     if (isCompleted()) {
       throw new IllegalStateException(
           "["
-              + metadataType
+              + getMetadataType()
               + "] metadata for transformation ["
-              + transformId
+              + getTransformId()
               + "] is already completed.");
     }
   }
@@ -204,7 +143,11 @@ public class InMemoryMetadataTransformation implements MetadataTransformation {
   private void checkForDeletion() {
     if (isDeleted()) {
       throw new IllegalStateException(
-          "[" + metadataType + "] metadata for transformation [" + transformId + "] was deleted.");
+          "["
+              + getMetadataType()
+              + "] metadata for transformation ["
+              + getTransformId()
+              + "] was deleted.");
     }
   }
 }

@@ -15,9 +15,7 @@ package com.connexta.transformation.commons.api;
 
 import com.connexta.transformation.commons.api.exceptions.TransformationException;
 import com.connexta.transformation.commons.api.exceptions.TransformationNotFoundException;
-import com.connexta.transformation.commons.api.status.MetadataTransformation;
-import com.connexta.transformation.commons.api.status.Transformation;
-import java.net.URI;
+import java.net.URL;
 
 /**
  * Provides the ability to save transformation request info, retrieve objects containing
@@ -35,7 +33,7 @@ public interface TransformationManager {
    * @return A {@link Transformation} representing the transformation.
    * @throws TransformationException if an error occurs
    */
-  Transformation createTransform(URI currentLocation, URI finalLocation, URI metadataLocation)
+  Transformation createTransform(URL currentLocation, URL finalLocation, URL metadataLocation)
       throws TransformationException;
 
   /**

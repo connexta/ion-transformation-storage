@@ -13,25 +13,19 @@
  */
 package com.connexta.transformation.commons.inmemory;
 
-import com.connexta.transformation.commons.api.RequestInfo;
+import com.connexta.transformation.commons.api.MetadataTransformation;
+import com.connexta.transformation.commons.api.Transformation;
+import com.connexta.transformation.commons.api.exceptions.PersistenceException;
 import com.connexta.transformation.commons.api.exceptions.TransformationNotFoundException;
-import com.connexta.transformation.commons.api.status.MetadataTransformation;
-import com.connexta.transformation.commons.api.status.Transformation;
-import java.net.URI;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Stream;
+import com.connexta.transformation.commons.api.impl.AbstractMetadataImpl;
+import com.connexta.transformation.commons.api.impl.AbstractTransformationImpl;
+import com.connexta.transformation.commons.api.impl.RequestInfoImpl;
+import com.connexta.transformation.pojo.MetadataPojo;
+import java.net.URL;
 
-public class InMemoryTransformation implements Transformation {
-
+/** An implementation of {@link Transformation} that stores all of the data in memory. */
+public class InMemoryTransformation extends AbstractTransformationImpl {
   private final InMemoryTransformationManager manager;
-  private final Map<String, MetadataTransformation> metadataMap;
-  private final RequestInfo requestInfo;
-  private final String transformId;
-  private final Instant startTime;
   private volatile boolean deleted;
 
   /**
@@ -44,14 +38,11 @@ public class InMemoryTransformation implements Transformation {
    */
   public InMemoryTransformation(
       InMemoryTransformationManager manager,
-      URI currentLocation,
-      URI finalLocation,
-      URI metacardLocation) {
+      URL currentLocation,
+      URL finalLocation,
+      URL metacardLocation) {
+    super(currentLocation, finalLocation, metacardLocation, manager.getClock());
     this.manager = manager;
-    startTime = Instant.now();
-    metadataMap = new ConcurrentHashMap<>();
-    requestInfo = new RequestInfoImpl(currentLocation, finalLocation, metacardLocation);
-    transformId = UUID.randomUUID().toString();
     this.deleted = false;
   }
 
@@ -59,7 +50,7 @@ public class InMemoryTransformation implements Transformation {
   public void delete() {
     if (!deleted) {
       try {
-        manager.delete(transformId);
+        manager.delete(getTransformId());
       } catch (TransformationNotFoundException e) { // ignore as it shouldn't happen
       }
     }
@@ -68,55 +59,26 @@ public class InMemoryTransformation implements Transformation {
   @Override
   public MetadataTransformation add(String metadataType) {
     if (deleted) {
-      throw new IllegalStateException("transformation [" + transformId + "] was deleted.");
+      throw new IllegalStateException("transformation [" + getTransformId() + "] was deleted.");
     } else if (isCompleted()) {
-      throw new IllegalStateException("transformation [" + transformId + "] is already complete.");
+      throw new IllegalStateException(
+          "transformation [" + getTransformId() + "] is already complete.");
     }
-    return metadataMap.computeIfAbsent(
+    return metadatas.computeIfAbsent(
         metadataType,
-        t -> new InMemoryMetadataTransformation(this, metadataType, transformId, requestInfo));
-  }
-
-  @Override
-  public Stream<MetadataTransformation> metadatas() {
-    return metadataMap.values().stream();
-  }
-
-  @Override
-  public MetadataTransformation getMetadata(String metadataType)
-      throws TransformationNotFoundException {
-    final MetadataTransformation metadata = metadataMap.get(metadataType);
-
-    if (metadata == null) {
-      throw new TransformationNotFoundException(
-          "No [" + metadataType + "] metadata found for transformation [" + transformId + "]");
-    }
-    return metadata;
-  }
-
-  @Override
-  public String getTransformId() {
-    return transformId;
-  }
-
-  @Override
-  public RequestInfo getRequestInfo() {
-    return requestInfo;
-  }
-
-  @Override
-  public Instant getStartTime() {
-    return startTime;
-  }
-
-  @Override
-  public Duration getDuration() {
-    return Duration.between(startTime, getCompletionTime().orElseGet(Instant::now));
+        t ->
+            new InMemoryMetadataTransformation(
+                this, metadataType, getTransformId(), getRequestInfo()));
   }
 
   @Override
   public boolean isDeleted() {
     return deleted;
+  }
+
+  @Override
+  protected AbstractMetadataImpl fromPojo(MetadataPojo pojo) throws PersistenceException {
+    return new InMemoryMetadataTransformation(pojo, this);
   }
 
   /** Called by the manager to notify this transformation that it was deleted. */

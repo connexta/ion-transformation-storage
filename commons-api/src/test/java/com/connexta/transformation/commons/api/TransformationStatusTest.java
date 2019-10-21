@@ -11,13 +11,13 @@
  * License is distributed along with this program and can be found at
  * <http://www.gnu.org/licenses/lgpl.html>.
  */
-package com.connexta.transformation.commons.api.status;
+package com.connexta.transformation.commons.api;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.when;
 
-import com.connexta.transformation.commons.api.status.TransformationStatus.State;
+import com.connexta.transformation.commons.api.TransformationStatus.State;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
@@ -126,12 +126,12 @@ public class TransformationStatusTest {
 
   // lets us use Mocktio.CALLS_REAL_METHODS which will call the implemented methods and mock others
   // normally
-  private abstract class testStatus implements TransformationStatus {}
+  abstract static class TestStatus implements TransformationStatus {}
 
   private TransformationStatus mockTransformationStatus(State state) {
     TransformationStatus testStatus =
         Mockito.mock(
-            testStatus.class, Mockito.withSettings().defaultAnswer(Mockito.CALLS_REAL_METHODS));
+            TestStatus.class, Mockito.withSettings().defaultAnswer(Mockito.CALLS_REAL_METHODS));
     when(testStatus.getState()).thenReturn(state);
     return testStatus;
   }

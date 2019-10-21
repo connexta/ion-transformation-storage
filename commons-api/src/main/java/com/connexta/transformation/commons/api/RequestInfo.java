@@ -13,33 +13,33 @@
  */
 package com.connexta.transformation.commons.api;
 
-import java.net.URI;
+import java.net.URL;
 
 /** A data structure to hold the information of an incoming transformation request. */
 public interface RequestInfo {
 
   /**
-   * Returns a URI which can be used to download the metacard that is to be transformed.
+   * Returns a url which can be used to download the metacard that is to be transformed.
    *
-   * @return a URI for retrieving the metacard to be transformed
+   * @return a url for retrieving the metacard to be transformed
    */
-  URI getMetacardLocation();
+  URL getMetacardLocation();
 
   /**
-   * Returns a URI which can be used to download the resource that will be used for the
+   * Returns a url which can be used to download the resource that will be used for the
    * transformation.
    *
-   * @return a URI for retrieving the resource for a transformation
+   * @return a url for retrieving the resource for a transformation
    */
-  URI getCurrentLocation();
+  URL getCurrentLocation();
 
   /**
-   * Returns a URI representing the final resting place of a resource for retrieval. This is the URI
+   * Returns a url representing the final resting place of a resource for retrieval. This is the URI
    * that will be added to metadata wherever a resource URI is needed. This URI will NOT be used to
    * retrieve information during the transformation process.
    *
-   * @return a URI representing where the resource will be saved once returned from the
+   * @return a url representing where the resource will be saved once returned from the
    *     transformation service
    */
-  URI getFinalLocation();
+  URL getFinalLocation();
 }

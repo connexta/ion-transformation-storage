@@ -13,14 +13,15 @@
  */
 package com.connexta.transformation.commons.inmemory;
 
+import com.connexta.transformation.commons.api.MetadataTransformation;
+import com.connexta.transformation.commons.api.Transformation;
 import com.connexta.transformation.commons.api.TransformationManager;
 import com.connexta.transformation.commons.api.exceptions.TransformationException;
 import com.connexta.transformation.commons.api.exceptions.TransformationNotFoundException;
-import com.connexta.transformation.commons.api.status.MetadataTransformation;
-import com.connexta.transformation.commons.api.status.Transformation;
-import java.net.URI;
-import java.util.HashMap;
+import io.micrometer.core.instrument.Clock;
+import java.net.URL;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * An implementation of {@link TransformationManager} that stores all of the data in memory. An
@@ -29,11 +30,21 @@ import java.util.Map;
  * exact same "locations" as input.
  */
 public class InMemoryTransformationManager implements TransformationManager {
-  private final Map<String, InMemoryTransformation> store = new HashMap<>();
+  private final Map<String, InMemoryTransformation> store = new ConcurrentHashMap<>();
+  private final Clock clock;
+
+  /**
+   * Instantiates a new transformation manager capable of managing all transformations in memory.
+   *
+   * @param clock the clock to use for retrieving wall and monotonic times
+   */
+  public InMemoryTransformationManager(Clock clock) {
+    this.clock = clock;
+  }
 
   @Override
   public Transformation createTransform(
-      URI currentLocation, URI finalLocation, URI metadataLocation) throws TransformationException {
+      URL currentLocation, URL finalLocation, URL metadataLocation) throws TransformationException {
     InMemoryTransformation transformation =
         new InMemoryTransformation(this, currentLocation, finalLocation, metadataLocation);
     store.put(transformation.getTransformId(), transformation);
@@ -54,7 +65,7 @@ public class InMemoryTransformationManager implements TransformationManager {
   @Override
   public MetadataTransformation get(String transformId, String metadataType)
       throws TransformationException {
-    return get(transformId).getMetadata(metadataType);
+    return get(transformId).get(metadataType);
   }
 
   @Override
@@ -66,5 +77,14 @@ public class InMemoryTransformationManager implements TransformationManager {
           "Transformation [" + transformId + "] cannot be found");
     }
     transformation.wasDeleted();
+  }
+
+  /**
+   * Gets the clock to use for retrieving wall and monotonic times.
+   *
+   * @return the clock to use for retrieving wall and monotonic times
+   */
+  public Clock getClock() {
+    return clock;
   }
 }

@@ -11,7 +11,7 @@
  * License is distributed along with this program and can be found at
  * <http://www.gnu.org/licenses/lgpl.html>.
  */
-package com.connexta.transformation.commons.api.status;
+package com.connexta.transformation.commons.api;
 
 import com.connexta.transformation.commons.api.exceptions.TransformationException;
 import com.connexta.transformation.commons.api.exceptions.TransformationNotFoundException;
@@ -71,7 +71,7 @@ public interface Transformation extends TransformationStatus {
    * @throws TransformationNotFoundException if no metadata of the given type is being generated
    *     from this transformation
    */
-  MetadataTransformation getMetadata(String metadataType) throws TransformationNotFoundException;
+  MetadataTransformation get(String metadataType) throws TransformationNotFoundException;
 
   @Override
   default State getState() {
@@ -84,7 +84,7 @@ public interface Transformation extends TransformationStatus {
   @Override
   default Optional<Instant> getCompletionTime() {
     if (isCompleted()) {
-      // Dont check the presence of Optionals here because they have to be if isCompleted() is true
+      // Don't check the presence of Optionals here because they have to be if isCompleted() is true
       return metadatas()
           .map(MetadataTransformation::getCompletionTime)
           .map(Optional::get)

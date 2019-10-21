@@ -11,7 +11,7 @@
  * License is distributed along with this program and can be found at
  * <http://www.gnu.org/licenses/lgpl.html>.
  */
-package com.connexta.transformation.commons.api.status;
+package com.connexta.transformation.commons.api;
 
 import static junit.framework.Assert.assertFalse;
 import static junit.framework.TestCase.assertTrue;
@@ -19,7 +19,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.connexta.transformation.commons.api.status.TransformationStatus.State;
+import com.connexta.transformation.commons.api.TransformationStatus.State;
 import com.github.npathai.hamcrestopt.OptionalMatchers;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -54,7 +54,7 @@ public class TransformationTest {
     return metadataTransformation;
   }
 
-  abstract class TestTransformation implements Transformation {}
+  abstract static class TestTransformation implements Transformation {}
 
   private Transformation mockTransformation(List<MetadataTransformation> metadata) {
     TestTransformation transformInfo =

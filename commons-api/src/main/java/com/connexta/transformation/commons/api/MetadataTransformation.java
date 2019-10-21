@@ -11,9 +11,8 @@
  * License is distributed along with this program and can be found at
  * <http://www.gnu.org/licenses/lgpl.html>.
  */
-package com.connexta.transformation.commons.api.status;
+package com.connexta.transformation.commons.api;
 
-import com.connexta.transformation.commons.api.ErrorCode;
 import com.connexta.transformation.commons.api.exceptions.TransformationException;
 import java.io.IOException;
 import java.io.InputStream;

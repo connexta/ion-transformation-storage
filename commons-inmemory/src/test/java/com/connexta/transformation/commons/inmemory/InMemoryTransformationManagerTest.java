@@ -13,26 +13,28 @@
  */
 package com.connexta.transformation.commons.inmemory;
 
-import static java.util.concurrent.TimeUnit.SECONDS;
-import static org.awaitility.Awaitility.await;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.Mockito.when;
 
 import com.connexta.transformation.commons.api.ErrorCode;
+import com.connexta.transformation.commons.api.MetadataTransformation;
+import com.connexta.transformation.commons.api.Transformation;
+import com.connexta.transformation.commons.api.TransformationStatus.State;
 import com.connexta.transformation.commons.api.exceptions.TransformationNotFoundException;
-import com.connexta.transformation.commons.api.status.MetadataTransformation;
-import com.connexta.transformation.commons.api.status.Transformation;
-import com.connexta.transformation.commons.api.status.TransformationStatus.State;
+import com.github.npathai.hamcrestopt.OptionalMatchers;
 import com.google.common.io.CharStreams;
+import io.micrometer.core.instrument.Clock;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.io.StringReader;
-import java.net.URI;
+import java.net.URL;
 import java.nio.charset.Charset;
 import java.time.Duration;
 import java.time.Instant;
@@ -40,20 +42,37 @@ import org.hamcrest.Matchers;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.Mockito;
 
 public class InMemoryTransformationManagerTest {
 
   public static final String TEST_METADATA_TYPE = "myMetadataType";
-  private final InMemoryTransformationManager manager = new InMemoryTransformationManager();
-  private URI currentUri;
-  private URI finalUri;
-  private URI metacardUri;
+
+  private static final Instant TIME = Instant.ofEpochMilli(1L);
+  private static final Instant TIME2 = Instant.ofEpochMilli(22L);
+  private static final Instant TIME3 = Instant.ofEpochMilli(333L);
+  private static final Instant TIME4 = Instant.ofEpochMilli(4444L);
+  private static final Instant TIME5 = Instant.ofEpochMilli(55555L);
+
+  private final Clock clock = Mockito.mock(Clock.class);
+
+  private final InMemoryTransformationManager manager = new InMemoryTransformationManager(clock);
+  private URL currentUri;
+  private URL finalUri;
+  private URL metacardUri;
 
   @Before
   public void setup() throws Exception {
-    currentUri = new URI("http://current.com");
-    finalUri = new URI("http://final.com");
-    metacardUri = new URI("http://metacard.com");
+    currentUri = new URL("http://current.com");
+    finalUri = new URL("http://final.com");
+    metacardUri = new URL("http://metacard.com");
+    when(clock.wallTime())
+        .thenReturn(
+            InMemoryTransformationManagerTest.TIME.toEpochMilli(),
+            InMemoryTransformationManagerTest.TIME2.toEpochMilli(),
+            InMemoryTransformationManagerTest.TIME3.toEpochMilli(),
+            InMemoryTransformationManagerTest.TIME4.toEpochMilli(),
+            InMemoryTransformationManagerTest.TIME5.toEpochMilli());
   }
 
   @Test
@@ -64,13 +83,13 @@ public class InMemoryTransformationManagerTest {
     assertEquals(transformation.getRequestInfo().getFinalLocation(), finalUri);
     assertEquals(transformation.getRequestInfo().getMetacardLocation(), metacardUri);
     assertNotNull(transformation.getTransformId());
-    assertTrue(transformation.getStartTime().isBefore(Instant.now().plus(Duration.ofSeconds(1))));
-    assertFalse(transformation.getCompletionTime().isPresent());
-    Duration firstDuration = transformation.getDuration();
-    assertNotNull(firstDuration);
-    await()
-        .atMost(1, SECONDS)
-        .until(() -> firstDuration.compareTo(transformation.getDuration()) < 0);
+    assertEquals(transformation.getStartTime(), InMemoryTransformationManagerTest.TIME);
+    assertThat(transformation.getCompletionTime(), OptionalMatchers.isEmpty());
+    assertThat(
+        transformation.getDuration(),
+        Matchers.equalTo(
+            Duration.between(
+                InMemoryTransformationManagerTest.TIME, InMemoryTransformationManagerTest.TIME2)));
     assertEquals(transformation.getState(), State.IN_PROGRESS);
     assertEquals(transformation.metadataTypes().count(), 0);
     assertEquals(transformation.metadatas().count(), 0);
@@ -103,19 +122,26 @@ public class InMemoryTransformationManagerTest {
     assertEquals(transformation.metadatas().count(), 1);
 
     MetadataTransformation metadata = transformation.metadatas().findFirst().get();
-    assertTrue(metadata.getStartTime().isBefore(Instant.now().plus(Duration.ofSeconds(1))));
+    assertEquals(metadata.getStartTime(), InMemoryTransformationManagerTest.TIME2);
     assertEquals(metadata.getState(), State.IN_PROGRESS);
     assertEquals(metadata.getMetadataType(), TEST_METADATA_TYPE);
     assertEquals(metadata.getTransformId(), transformation.getTransformId());
     assertEquals(metadata.getRequestInfo(), transformation.getRequestInfo());
-    assertFalse(metadata.getCompletionTime().isPresent());
+    assertThat(transformation.getCompletionTime(), OptionalMatchers.isEmpty());
     assertFalse(metadata.getContent().isPresent());
     assertFalse(metadata.getContentType().isPresent());
     assertFalse(metadata.getFailureReason().isPresent());
     assertFalse(metadata.getFailureMessage().isPresent());
-    Duration firstDuration = metadata.getDuration();
-    assertNotNull(firstDuration);
-    await().atMost(1, SECONDS).until(() -> firstDuration.compareTo(metadata.getDuration()) < 0);
+    assertThat(
+        metadata.getDuration(),
+        Matchers.equalTo(
+            Duration.between(
+                InMemoryTransformationManagerTest.TIME2, InMemoryTransformationManagerTest.TIME3)));
+    assertThat(
+        transformation.getDuration(),
+        Matchers.equalTo(
+            Duration.between(
+                InMemoryTransformationManagerTest.TIME, InMemoryTransformationManagerTest.TIME4)));
   }
 
   @Test
@@ -169,12 +195,23 @@ public class InMemoryTransformationManagerTest {
     assertEquals(metadata.getContentType().get(), metadataContentType);
     assertTrue(metadata.getContentLength().isPresent());
     assertEquals(metadata.getContentLength().getAsLong(), 7);
-    assertTrue(metadata.getCompletionTime().isPresent());
-    assertTrue(transformation.getCompletionTime().isPresent());
-    assertEquals(transformation.getCompletionTime().get(), metadata.getCompletionTime().get());
-    assertEquals(
-        Duration.between(transformation.getStartTime(), transformation.getCompletionTime().get()),
-        transformation.getDuration());
+    assertEquals(metadata.getStartTime(), InMemoryTransformationManagerTest.TIME2);
+    assertThat(
+        metadata.getCompletionTime(),
+        OptionalMatchers.isPresentAndIs(InMemoryTransformationManagerTest.TIME3));
+    assertThat(
+        transformation.getCompletionTime(),
+        OptionalMatchers.isPresentAndIs(InMemoryTransformationManagerTest.TIME3));
+    assertThat(
+        metadata.getDuration(),
+        Matchers.equalTo(
+            Duration.between(
+                InMemoryTransformationManagerTest.TIME2, InMemoryTransformationManagerTest.TIME3)));
+    assertThat(
+        transformation.getDuration(),
+        Matchers.equalTo(
+            Duration.between(
+                InMemoryTransformationManagerTest.TIME, InMemoryTransformationManagerTest.TIME3)));
   }
 
   @Test
@@ -200,12 +237,23 @@ public class InMemoryTransformationManagerTest {
     assertEquals(metadata.getContentType().get(), metadataContentType);
     assertTrue(metadata.getContentLength().isPresent());
     assertEquals(metadata.getContentLength().getAsLong(), 7);
-    assertTrue(metadata.getCompletionTime().isPresent());
-    assertTrue(transformation.getCompletionTime().isPresent());
-    assertEquals(transformation.getCompletionTime().get(), metadata.getCompletionTime().get());
-    assertEquals(
-        Duration.between(transformation.getStartTime(), transformation.getCompletionTime().get()),
-        transformation.getDuration());
+    assertEquals(metadata.getStartTime(), InMemoryTransformationManagerTest.TIME2);
+    assertThat(
+        metadata.getCompletionTime(),
+        OptionalMatchers.isPresentAndIs(InMemoryTransformationManagerTest.TIME3));
+    assertThat(
+        transformation.getCompletionTime(),
+        OptionalMatchers.isPresentAndIs(InMemoryTransformationManagerTest.TIME3));
+    assertThat(
+        metadata.getDuration(),
+        Matchers.equalTo(
+            Duration.between(
+                InMemoryTransformationManagerTest.TIME2, InMemoryTransformationManagerTest.TIME3)));
+    assertThat(
+        transformation.getDuration(),
+        Matchers.equalTo(
+            Duration.between(
+                InMemoryTransformationManagerTest.TIME, InMemoryTransformationManagerTest.TIME3)));
   }
 
   @Test
@@ -234,16 +282,27 @@ public class InMemoryTransformationManagerTest {
     }
     assertEquals(actualMetadataContent, metadataContent);
     assertTrue(metadata.wasSuccessful());
-    assertTrue(metadata.getContentType().isPresent());
-    assertEquals(metadata.getContentType().get(), metadataContentType);
-    assertTrue(metadata.getContentLength().isPresent());
-    assertEquals(metadata.getContentLength().getAsLong(), 7);
-    assertTrue(metadata.getCompletionTime().isPresent());
-    assertTrue(transformation.getCompletionTime().isPresent());
-    assertEquals(transformation.getCompletionTime().get(), metadata.getCompletionTime().get());
-    assertEquals(
-        Duration.between(transformation.getStartTime(), transformation.getCompletionTime().get()),
-        transformation.getDuration());
+    assertThat(metadata.getContentType(), OptionalMatchers.isPresentAndIs(metadataContentType));
+    assertThat(
+        metadata.getContentLength().stream().boxed().findFirst(),
+        OptionalMatchers.isPresentAndIs(7L));
+    assertThat(metadata.getStartTime(), Matchers.equalTo(InMemoryTransformationManagerTest.TIME2));
+    assertThat(
+        metadata.getCompletionTime(),
+        OptionalMatchers.isPresentAndIs(InMemoryTransformationManagerTest.TIME3));
+    assertThat(
+        transformation.getCompletionTime(),
+        OptionalMatchers.isPresentAndIs(InMemoryTransformationManagerTest.TIME3));
+    assertThat(
+        metadata.getDuration(),
+        Matchers.equalTo(
+            Duration.between(
+                InMemoryTransformationManagerTest.TIME2, InMemoryTransformationManagerTest.TIME3)));
+    assertThat(
+        transformation.getDuration(),
+        Matchers.equalTo(
+            Duration.between(
+                InMemoryTransformationManagerTest.TIME, InMemoryTransformationManagerTest.TIME3)));
   }
 
   @Test(expected = IllegalStateException.class)
