@@ -54,20 +54,22 @@ public interface TransformationStatus {
   Optional<Instant> getCompletionTime();
 
   /**
+   * Gets the current state of the transformation.
+   *
+   * @return the current transformation state
+   */
+  State getState();
+
+  /**
    * Returns the duration of the transformation. If the transformation is ongoing, the difference
    * between the start time and now will be returned, otherwise, the difference between the start
    * and completion times will be returned.
    *
    * @return the duration of the transformation.
    */
-  Duration getDuration();
-
-  /**
-   * Gets the current state of the transformation.
-   *
-   * @return the current transformation state
-   */
-  State getState();
+  default Duration getDuration() {
+    return Duration.between(getStartTime(), getCompletionTime().orElseGet(Instant::now));
+  }
 
   /**
    * Returns true if the transformation has finished, otherwise, returns false.

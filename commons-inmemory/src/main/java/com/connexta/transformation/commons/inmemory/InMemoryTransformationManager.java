@@ -23,6 +23,12 @@ import java.net.URI;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * An implementation of {@link TransformationManager} that stores all of the data in memory. An
+ * internal {@link Map} is used to store the {@link Transformation}s and their associated {@link
+ * MetadataTransformation}s. The store is threadsafe, but will allow multiple requests with the
+ * exact same "locations" as input.
+ */
 public class InMemoryTransformationManager implements TransformationManager {
   private final Map<String, Transformation> store = new HashMap<>();
 
@@ -47,16 +53,18 @@ public class InMemoryTransformationManager implements TransformationManager {
   }
 
   @Override
-  public MetadataTransformation get(String transformId, String type)
+  public MetadataTransformation get(String transformId, String metadataType)
       throws TransformationException {
     return get(transformId)
-        .metadatas()
-        .filter(m -> m.getMetadataType().equals(type))
-        .findFirst()
+        .getMetadata(metadataType)
         .orElseThrow(
             () ->
                 new TransformationNotFoundException(
-                    "No [" + type + "] metadata found for transformation [" + transformId + "]"));
+                    "No ["
+                        + metadataType
+                        + "] metadata found for transformation ["
+                        + transformId
+                        + "]"));
   }
 
   @Override

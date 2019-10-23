@@ -16,12 +16,20 @@ package com.connexta.transformation.commons.inmemory;
 import com.connexta.transformation.commons.api.RequestInfo;
 import java.net.URI;
 
+/** A data structure to hold the information of an incoming transformation request. */
 public class RequestInfoImpl implements RequestInfo {
 
   private final URI metacardLocation;
   private final URI currentLocation;
   private final URI finalLocation;
 
+  /**
+   * Creates a structure that will hold the information for the incoming files.
+   *
+   * @param currentLocation the location to retrieve the file
+   * @param finalLocation the downloadable location to put on the transformed metadata
+   * @param metacardLocation the location of the metacard XML for the file
+   */
   public RequestInfoImpl(URI currentLocation, URI finalLocation, URI metacardLocation) {
     this.currentLocation = currentLocation;
     this.finalLocation = finalLocation;

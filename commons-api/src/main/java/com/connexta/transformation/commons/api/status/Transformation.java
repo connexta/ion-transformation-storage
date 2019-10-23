@@ -14,6 +14,9 @@
 package com.connexta.transformation.commons.api.status;
 
 import com.connexta.transformation.commons.api.exceptions.TransformationException;
+import java.time.Instant;
+import java.util.Comparator;
+import java.util.Optional;
 import java.util.stream.Stream;
 
 /**
@@ -51,11 +54,31 @@ public interface Transformation extends TransformationStatus {
    */
   Stream<MetadataTransformation> metadatas();
 
+  /**
+   * Returns a {@link MetadataTransformation}, for the given type.
+   *
+   * @return A {@link MetadataTransformation} or a empty if it doesn't have one of that type.
+   */
+  Optional<MetadataTransformation> getMetadata(String metadataType);
+
   @Override
   default State getState() {
     return metadatas()
         .map(TransformationStatus::getState)
         .reduce(State::reduce)
         .orElse(State.IN_PROGRESS);
+  }
+
+  @Override
+  default Optional<Instant> getCompletionTime() {
+    if (isCompleted()) {
+      // Dont check the presence of Optionals here because they have to be if isCompleted() is true
+      return metadatas()
+          .map(MetadataTransformation::getCompletionTime)
+          .map(Optional::get)
+          .max(Comparator.naturalOrder());
+    } else {
+      return Optional.empty();
+    }
   }
 }

@@ -465,7 +465,7 @@
 
     <modules>
         <module>commons-api</module>
-        <module>commons-impl</module>
+        <module>commons-inmemory</module>
     </modules>
 
 </project>

@@ -21,7 +21,6 @@ import com.connexta.transformation.commons.inmemory.RequestInfoImpl;
 import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -35,10 +34,17 @@ public class InMemoryTransformation implements Transformation {
   private final String transformId;
   private final Instant startTime;
 
-  public InMemoryTransformation(URI currentLocation, URI finalLocation, URI metadataLocation) {
+  /**
+   * Generates a startTime, a Transform ID, and the related {@link RequestInfoImpl}.
+   *
+   * @param currentLocation the location to retrieve the file
+   * @param finalLocation the downloadable location to put on the transformed metadata
+   * @param metacardLocation the location of the metacard XML for the file
+   */
+  public InMemoryTransformation(URI currentLocation, URI finalLocation, URI metacardLocation) {
     startTime = Instant.now();
     metadataMap = new HashMap<>();
-    requestInfo = new RequestInfoImpl(currentLocation, finalLocation, metadataLocation);
+    requestInfo = new RequestInfoImpl(currentLocation, finalLocation, metacardLocation);
     transformId = UUID.randomUUID().toString();
   }
 
@@ -47,20 +53,17 @@ public class InMemoryTransformation implements Transformation {
       throws TransformationException, IllegalArgumentException {
     MetadataTransformation metadata =
         new InMemoryMetadataTransformation(metadataType, transformId, requestInfo);
-    synchronized (metadataMap) {
-      if (metadataMap.get(metadataType) != null) {
-        throw new IllegalStateException(
-            "["
-                + metadataType
-                + "] metadata already exists for transformation ["
-                + transformId
-                + "]");
-      } else if (isCompleted()) {
-        throw new IllegalStateException(
-            "transformation [" + transformId + "] is already complete.");
-      } else {
-        metadataMap.put(metadataType, metadata);
-      }
+    if (metadataMap.get(metadataType) != null) {
+      throw new IllegalStateException(
+          "["
+              + metadataType
+              + "] metadata already exists for transformation ["
+              + transformId
+              + "]");
+    } else if (isCompleted()) {
+      throw new IllegalStateException("transformation [" + transformId + "] is already complete.");
+    } else {
+      metadataMap.put(metadataType, metadata);
     }
     return metadata;
   }
@@ -68,6 +71,11 @@ public class InMemoryTransformation implements Transformation {
   @Override
   public Stream<MetadataTransformation> metadatas() {
     return metadataMap.values().stream();
+  }
+
+  @Override
+  public Optional<MetadataTransformation> getMetadata(String metadataType) {
+    return metadatas().filter(m -> m.getMetadataType().equals(metadataType)).findFirst();
   }
 
   @Override
@@ -86,23 +94,7 @@ public class InMemoryTransformation implements Transformation {
   }
 
   @Override
-  public Optional<Instant> getCompletionTime() {
-    if (isCompleted()) {
-      // Dont check the presence of Optionals here because they have to be if isCompleted() is true
-      return metadatas()
-          .max(Comparator.comparing(m -> m.getCompletionTime().get()))
-          .get()
-          .getCompletionTime();
-    } else {
-      return Optional.empty();
-    }
-  }
-
-  @Override
   public Duration getDuration() {
-    Optional<Instant> completionTime = getCompletionTime();
-    return completionTime.isPresent()
-        ? Duration.between(startTime, completionTime.get())
-        : Duration.between(startTime, Instant.now());
+    return Duration.between(startTime, getCompletionTime().orElseGet(Instant::now));
   }
 }

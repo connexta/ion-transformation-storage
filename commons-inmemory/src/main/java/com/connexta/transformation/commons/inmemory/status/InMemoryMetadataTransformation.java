@@ -17,17 +17,21 @@ import com.connexta.transformation.commons.api.ErrorCode;
 import com.connexta.transformation.commons.api.RequestInfo;
 import com.connexta.transformation.commons.api.exceptions.TransformationException;
 import com.connexta.transformation.commons.api.status.MetadataTransformation;
-import com.google.common.io.ByteSource;
 import com.google.common.io.ByteStreams;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.OptionalLong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * An implementation of {@link MetadataTransformation} that stores all of the data in memory. The
+ * contents of the metadata will be stored as an array of bytes. All of the state that would change
+ * during the lifecycle of this object is threadsafe and kept in sync.
+ */
 public class InMemoryMetadataTransformation implements MetadataTransformation {
   private static final Logger LOGGER =
       LoggerFactory.getLogger(InMemoryMetadataTransformation.class);
@@ -43,6 +47,13 @@ public class InMemoryMetadataTransformation implements MetadataTransformation {
   private ErrorCode failureReason;
   private String failureMessage;
 
+  /**
+   * Sets the state to "In progress" and initializes the start time.
+   *
+   * @param metadataType the type of metadata this structure will hold
+   * @param transformId the id of the transform request
+   * @param requestInfo the corresponding {@link RequestInfo} object
+   */
   public InMemoryMetadataTransformation(
       String metadataType, String transformId, RequestInfo requestInfo) {
     this.startTime = Instant.now();
@@ -59,32 +70,30 @@ public class InMemoryMetadataTransformation implements MetadataTransformation {
 
   @Override
   public Optional<InputStream> getContent() {
-    if (content == null) {
-      return Optional.empty();
-    } else {
-      try {
-        return Optional.of(ByteSource.wrap(content).openStream());
-      } catch (IOException e) {
-        LOGGER.error(
-            "Unable to read contents of [{}] metadata for transformation [{}].",
-            metadataType,
-            transformId);
+    synchronized (stateLock) {
+      if (content == null) {
         return Optional.empty();
+      } else {
+        return Optional.of(new ByteArrayInputStream(content));
       }
     }
   }
 
   @Override
   public Optional<String> getContentType() {
-    return Optional.ofNullable(contentType);
+    synchronized (stateLock) {
+      return Optional.ofNullable(contentType);
+    }
   }
 
   @Override
   public OptionalLong getContentLength() {
-    if (content == null) {
-      return OptionalLong.empty();
-    } else {
-      return OptionalLong.of(content.length);
+    synchronized (stateLock) {
+      if (content == null) {
+        return OptionalLong.empty();
+      } else {
+        return OptionalLong.of(content.length);
+      }
     }
   }
 
@@ -107,9 +116,9 @@ public class InMemoryMetadataTransformation implements MetadataTransformation {
         }
       }
       this.state = State.SUCCESSFUL;
+      this.contentType = contentType;
+      this.completionTime = completionTime;
     }
-    this.contentType = contentType;
-    this.completionTime = completionTime;
   }
 
   @Override
@@ -119,20 +128,24 @@ public class InMemoryMetadataTransformation implements MetadataTransformation {
     synchronized (stateLock) {
       checkForCompletion();
       state = State.FAILED;
+      failureReason = reason;
+      failureMessage = message;
+      this.completionTime = completionTime;
     }
-    failureReason = reason;
-    failureMessage = message;
-    this.completionTime = completionTime;
   }
 
   @Override
   public Optional<ErrorCode> getFailureReason() {
-    return Optional.ofNullable(failureReason);
+    synchronized (stateLock) {
+      return Optional.ofNullable(failureReason);
+    }
   }
 
   @Override
   public Optional<String> getFailureMessage() {
-    return Optional.ofNullable(failureMessage);
+    synchronized (stateLock) {
+      return Optional.ofNullable(failureMessage);
+    }
   }
 
   @Override
@@ -152,17 +165,16 @@ public class InMemoryMetadataTransformation implements MetadataTransformation {
 
   @Override
   public Optional<Instant> getCompletionTime() {
-    return Optional.ofNullable(completionTime);
-  }
-
-  @Override
-  public Duration getDuration() {
-    return Duration.between(startTime, getCompletionTime().orElse(Instant.now()));
+    synchronized (stateLock) {
+      return Optional.ofNullable(completionTime);
+    }
   }
 
   @Override
   public State getState() {
-    return state;
+    synchronized (stateLock) {
+      return state;
+    }
   }
 
   private void checkForCompletion() {
