@@ -32,7 +32,7 @@ public class TransformationTest {
 
   private List<MetadataTransformation> metadata = new ArrayList<>();
 
-  private Transformation transformation = mockTransformInfo(metadata);
+  private Transformation transformation = mockTransformation(metadata);
 
   // lets us use Mocktio.CALLS_REAL_METHODS which will call the implemented methods and mock others
   // normally
@@ -51,7 +51,7 @@ public class TransformationTest {
 
   abstract class TestTransformation implements Transformation {}
 
-  private Transformation mockTransformInfo(List<MetadataTransformation> metadata) {
+  private Transformation mockTransformation(List<MetadataTransformation> metadata) {
     TestTransformation transformInfo =
         mock(
             TestTransformation.class,

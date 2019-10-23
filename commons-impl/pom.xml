@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
-        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-        xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <parent>
         <artifactId>commons</artifactId>
         <groupId>com.connexta.transformation</groupId>
@@ -9,8 +9,31 @@
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
-    <name>Transformation :: Commons :: Api</name>
-    <artifactId>commons-api</artifactId>
+    <artifactId>commons-impl</artifactId>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.connexta.transformation</groupId>
+            <artifactId>commons-api</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+            <version>28.1-jre</version>
+        </dependency>
+        <dependency>
+            <groupId>org.awaitility</groupId>
+            <artifactId>awaitility</artifactId>
+            <version>4.0.1</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>1.7.28</version>
+        </dependency>
+    </dependencies>
 
     <build>
         <plugins>
@@ -31,17 +54,17 @@
                                         <limit implementation="org.codice.jacoco.LenientLimit">
                                             <counter>INSTRUCTION</counter>
                                             <value>COVEREDRATIO</value>
-                                            <minimum>0.70</minimum>
+                                            <minimum>0.91</minimum>
                                         </limit>
                                         <limit implementation="org.codice.jacoco.LenientLimit">
                                             <counter>BRANCH</counter>
                                             <value>COVEREDRATIO</value>
-                                            <minimum>1.00</minimum>
+                                            <minimum>0.88</minimum>
                                         </limit>
                                         <limit implementation="org.codice.jacoco.LenientLimit">
                                             <counter>COMPLEXITY</counter>
                                             <value>COVEREDRATIO</value>
-                                            <minimum>0.75</minimum>
+                                            <minimum>0.93</minimum>
                                         </limit>
                                     </limits>
                                 </rule>
