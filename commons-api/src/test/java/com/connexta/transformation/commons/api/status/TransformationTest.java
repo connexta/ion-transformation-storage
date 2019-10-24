@@ -20,26 +20,30 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.connexta.transformation.commons.api.status.TransformationStatus.State;
+import com.github.npathai.hamcrestopt.OptionalMatchers;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import org.hamcrest.Matchers;
+import org.junit.Assert;
 import org.junit.Test;
 import org.mockito.Mockito;
 import org.mockito.stubbing.Answer;
 
 public class TransformationTest {
 
-  private List<MetadataTransformation> metadata = new ArrayList<>();
+  private final List<MetadataTransformation> metadata = new ArrayList<>();
 
-  private Transformation transformation = mockTransformation(metadata);
+  private final Transformation transformation = mockTransformation(metadata);
 
   // lets us use Mocktio.CALLS_REAL_METHODS which will call the implemented methods and mock others
   // normally
   abstract class TestMetadataTransformation implements MetadataTransformation {}
 
   // Creates Metadatas and automatically adds them to the metadata List.
-  private void createMetadata(State state, String type) {
+  private MetadataTransformation createMetadata(State state, String type) {
     MetadataTransformation metadataTransformation =
         mock(
             TestMetadataTransformation.class,
@@ -47,6 +51,7 @@ public class TransformationTest {
     when(metadataTransformation.getMetadataType()).thenReturn(type);
     when(metadataTransformation.getState()).thenReturn(state);
     this.metadata.add(metadataTransformation);
+    return metadataTransformation;
   }
 
   abstract class TestTransformation implements Transformation {}
@@ -197,5 +202,28 @@ public class TransformationTest {
     createMetadata(State.FAILED, "two");
     createMetadata(State.IN_PROGRESS, "three");
     assertFalse(transformation.isUnknown());
+  }
+
+  @Test
+  public void testCompletionTimeWhenCompleted() throws Exception {
+    when(createMetadata(State.SUCCESSFUL, "one").getCompletionTime())
+        .thenReturn(Optional.of(Instant.ofEpochMilli(1L)));
+    when(createMetadata(State.FAILED, "two").getCompletionTime())
+        .thenReturn(Optional.of(Instant.ofEpochMilli(3L)));
+    when(createMetadata(State.SUCCESSFUL, "three").getCompletionTime())
+        .thenReturn(Optional.of(Instant.ofEpochMilli(2L)));
+
+    Assert.assertThat(
+        transformation.getCompletionTime(),
+        OptionalMatchers.isPresentAndIs(Instant.ofEpochMilli(3L)));
+  }
+
+  @Test
+  public void testCompletionTimeWhenNotCompleted() throws Exception {
+    createMetadata(State.SUCCESSFUL, "one");
+    createMetadata(State.IN_PROGRESS, "two");
+    createMetadata(State.SUCCESSFUL, "three");
+
+    Assert.assertThat(transformation.getCompletionTime(), OptionalMatchers.isEmpty());
   }
 }

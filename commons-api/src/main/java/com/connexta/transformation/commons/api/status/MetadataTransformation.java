@@ -17,8 +17,12 @@ import com.connexta.transformation.commons.api.ErrorCode;
 import com.connexta.transformation.commons.api.exceptions.TransformationException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.Reader;
+import java.nio.charset.Charset;
 import java.util.Optional;
 import java.util.OptionalLong;
+import org.apache.commons.io.input.ReaderInputStream;
 
 /**
  * Handles information about a piece of metadata that has been, or will be generated through the
@@ -39,8 +43,26 @@ public interface MetadataTransformation extends TransformationStatus {
    *
    * @return an input stream for this metadata or empty if not available yet or if no metadata was
    *     generated
+   * @throws TransformationException if an error occurs while executing this method
+   * @throws IOException if an I/O error occurred while retrieving the content
+   * @throws IllegalStateException if the transformation was deleted already
    */
-  Optional<InputStream> getContent();
+  Optional<InputStream> getContent() throws TransformationException, IOException;
+
+  /**
+   * Returns an optional {@link Reader} for retrieving the metadata. If the metadata hasn't been
+   * created yet, or failed to be created, the optional will be empty.
+   *
+   * @param charset the character set to use for retrieving the content
+   * @return an input stream for this metadata or empty if not available yet or if no metadata was
+   *     generated
+   * @throws TransformationException if an error occurs while executing this method
+   * @throws IOException if an I/O error occurred while retrieving the content
+   * @throws IllegalStateException if the transformation was deleted already
+   */
+  default Optional<Reader> getContent(Charset charset) throws TransformationException, IOException {
+    return getContent().map(is -> new InputStreamReader(is, charset));
+  }
 
   /**
    * Returns an optional containing the content type of the metadata. If the metadata hasn't been
@@ -67,12 +89,29 @@ public interface MetadataTransformation extends TransformationStatus {
    * @param contentType the content type of the metadata
    * @param contentStream an {@link InputStream} for reading the metadata
    * @throws TransformationException if an error occurs while executing this method
-   * @throws java.io.IOException if an IOException occurs while reading the provided stream
+   * @throws IOException if an IOException occurs while reading the provided stream
    * @throws IllegalStateException if this method is called when this metadata transformation has
-   *     already been completed
+   *     already been completed or if the transformation was deleted already
    */
   void succeed(String contentType, InputStream contentStream)
       throws TransformationException, IOException;
+
+  /**
+   * Used to signify the successful creation of the metadata for this MetadataTransformation. The
+   * given {@link InputStream} will be read and closed within this method.
+   *
+   * @param contentType the content type of the metadata
+   * @param charset the character set used for the content
+   * @param contentStream a {@link Reader} for reading the metadata
+   * @throws TransformationException if an error occurs while executing this method
+   * @throws IOException if an IOException occurs while reading the provided stream
+   * @throws IllegalStateException if this method is called when this metadata transformation has
+   *     already been completed or if the transformation was deleted already
+   */
+  default void succeed(String contentType, Charset charset, Reader contentStream)
+      throws TransformationException, IOException {
+    succeed(contentType, new ReaderInputStream(contentStream, charset));
+  }
 
   /**
    * Used to signify that the creation of this metadata failed.
@@ -81,7 +120,7 @@ public interface MetadataTransformation extends TransformationStatus {
    * @param message a message including information about why the metadata creation failed
    * @throws TransformationException if an error occurs while executing this method
    * @throws IllegalStateException if this method is called when this metadata transformation has
-   *     already been completed
+   *     already been completed or if the transformation was deleted already
    */
   void fail(ErrorCode reason, String message) throws TransformationException;
 

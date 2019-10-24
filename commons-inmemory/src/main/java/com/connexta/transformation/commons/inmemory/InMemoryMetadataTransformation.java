@@ -11,11 +11,10 @@
  * License is distributed along with this program and can be found at
  * <http://www.gnu.org/licenses/lgpl.html>.
  */
-package com.connexta.transformation.commons.inmemory.status;
+package com.connexta.transformation.commons.inmemory;
 
 import com.connexta.transformation.commons.api.ErrorCode;
 import com.connexta.transformation.commons.api.RequestInfo;
-import com.connexta.transformation.commons.api.exceptions.TransformationException;
 import com.connexta.transformation.commons.api.status.MetadataTransformation;
 import com.google.common.io.ByteStreams;
 import java.io.ByteArrayInputStream;
@@ -35,6 +34,7 @@ import org.slf4j.LoggerFactory;
 public class InMemoryMetadataTransformation implements MetadataTransformation {
   private static final Logger LOGGER =
       LoggerFactory.getLogger(InMemoryMetadataTransformation.class);
+  private final InMemoryTransformation transformation;
   private final Object stateLock = new Object();
   private final String metadataType;
   private final String transformId;
@@ -50,17 +50,27 @@ public class InMemoryMetadataTransformation implements MetadataTransformation {
   /**
    * Sets the state to "In progress" and initializes the start time.
    *
+   * @param transformation the associated transformation
    * @param metadataType the type of metadata this structure will hold
    * @param transformId the id of the transform request
    * @param requestInfo the corresponding {@link RequestInfo} object
    */
   public InMemoryMetadataTransformation(
-      String metadataType, String transformId, RequestInfo requestInfo) {
+      InMemoryTransformation transformation,
+      String metadataType,
+      String transformId,
+      RequestInfo requestInfo) {
+    this.transformation = transformation;
     this.startTime = Instant.now();
     this.state = State.IN_PROGRESS;
     this.metadataType = metadataType;
     this.transformId = transformId;
     this.requestInfo = requestInfo;
+  }
+
+  @Override
+  public boolean isDeleted() {
+    return transformation.isDeleted();
   }
 
   @Override
@@ -70,6 +80,7 @@ public class InMemoryMetadataTransformation implements MetadataTransformation {
 
   @Override
   public Optional<InputStream> getContent() {
+    checkForDeletion();
     synchronized (stateLock) {
       if (content == null) {
         return Optional.empty();
@@ -98,9 +109,10 @@ public class InMemoryMetadataTransformation implements MetadataTransformation {
   }
 
   @Override
-  public void succeed(String contentType, InputStream contentStream)
-      throws TransformationException, IOException, IllegalStateException {
-    Instant completionTime = Instant.now();
+  public void succeed(String contentType, InputStream contentStream) throws IOException {
+    checkForDeletion();
+    Instant now = Instant.now();
+
     synchronized (stateLock) {
       checkForCompletion();
       try {
@@ -117,20 +129,21 @@ public class InMemoryMetadataTransformation implements MetadataTransformation {
       }
       this.state = State.SUCCESSFUL;
       this.contentType = contentType;
-      this.completionTime = completionTime;
+      this.completionTime = now;
     }
   }
 
   @Override
-  public void fail(ErrorCode reason, String message)
-      throws TransformationException, IllegalStateException {
-    Instant completionTime = Instant.now();
+  public void fail(ErrorCode reason, String message) {
+    checkForDeletion();
+    Instant now = Instant.now();
+
     synchronized (stateLock) {
       checkForCompletion();
       state = State.FAILED;
       failureReason = reason;
       failureMessage = message;
-      this.completionTime = completionTime;
+      this.completionTime = now;
     }
   }
 
@@ -185,6 +198,13 @@ public class InMemoryMetadataTransformation implements MetadataTransformation {
               + "] metadata for transformation ["
               + transformId
               + "] is already completed.");
+    }
+  }
+
+  private void checkForDeletion() {
+    if (isDeleted()) {
+      throw new IllegalStateException(
+          "[" + metadataType + "] metadata for transformation [" + transformId + "] was deleted.");
     }
   }
 }

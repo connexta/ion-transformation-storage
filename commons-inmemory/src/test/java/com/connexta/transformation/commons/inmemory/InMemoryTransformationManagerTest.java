@@ -28,18 +28,23 @@ import com.connexta.transformation.commons.api.status.Transformation;
 import com.connexta.transformation.commons.api.status.TransformationStatus.State;
 import com.google.common.io.CharStreams;
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.Reader;
+import java.io.StringReader;
 import java.net.URI;
+import java.nio.charset.Charset;
 import java.time.Duration;
 import java.time.Instant;
+import org.hamcrest.Matchers;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
 public class InMemoryTransformationManagerTest {
 
   public static final String TEST_METADATA_TYPE = "myMetadataType";
-  private InMemoryTransformationManager manager = new InMemoryTransformationManager();
+  private final InMemoryTransformationManager manager = new InMemoryTransformationManager();
   private URI currentUri;
   private URI finalUri;
   private URI metacardUri;
@@ -113,10 +118,32 @@ public class InMemoryTransformationManagerTest {
     await().atMost(1, SECONDS).until(() -> firstDuration.compareTo(metadata.getDuration()) < 0);
   }
 
+  @Test
+  public void testAddDuplicateMetadataTypeReturnsOriginalOne() throws Exception {
+    final Transformation transformation =
+        manager.createTransform(currentUri, finalUri, metacardUri);
+    final MetadataTransformation metadata = transformation.add(TEST_METADATA_TYPE);
+
+    Assert.assertThat(transformation.add(TEST_METADATA_TYPE), Matchers.sameInstance(metadata));
+  }
+
   @Test(expected = IllegalStateException.class)
-  public void addDuplicateMetadataTypeThrowsException() throws Exception {
-    Transformation transformation = manager.createTransform(currentUri, finalUri, metacardUri);
-    transformation.add(TEST_METADATA_TYPE);
+  public void testAddMetadataWhenTransformationIsCompletedFails() throws Exception {
+    final Transformation transformation =
+        manager.createTransform(currentUri, finalUri, metacardUri);
+
+    transformation.add(TEST_METADATA_TYPE).fail(ErrorCode.TRANSFORMATION_FAILURE, "this is why");
+
+    transformation.add("new_type");
+  }
+
+  @Test(expected = IllegalStateException.class)
+  public void testAddMetadataWhenTransformationIsDeletedFails() throws Exception {
+    final Transformation transformation =
+        manager.createTransform(currentUri, finalUri, metacardUri);
+
+    transformation.delete();
+
     transformation.add(TEST_METADATA_TYPE);
   }
 
@@ -151,6 +178,87 @@ public class InMemoryTransformationManagerTest {
   }
 
   @Test
+  public void succeedMetadataStoresContentsWithReader() throws Exception {
+    Transformation transformation = manager.createTransform(currentUri, finalUri, metacardUri);
+    transformation.add(TEST_METADATA_TYPE);
+
+    MetadataTransformation metadata =
+        manager.get(transformation.getTransformId(), TEST_METADATA_TYPE);
+    String metadataContent = "testing";
+    String metadataContentType = "text/plain";
+    metadata.succeed(
+        metadataContentType, Charset.defaultCharset(), new StringReader(metadataContent));
+
+    assertTrue(metadata.getContent().isPresent());
+    String actualMetadataContent = null;
+    try (final Reader reader = metadata.getContent(Charset.defaultCharset()).get()) {
+      actualMetadataContent = CharStreams.toString(reader);
+    }
+    assertEquals(actualMetadataContent, metadataContent);
+    assertTrue(metadata.wasSuccessful());
+    assertTrue(metadata.getContentType().isPresent());
+    assertEquals(metadata.getContentType().get(), metadataContentType);
+    assertTrue(metadata.getContentLength().isPresent());
+    assertEquals(metadata.getContentLength().getAsLong(), 7);
+    assertTrue(metadata.getCompletionTime().isPresent());
+    assertTrue(transformation.getCompletionTime().isPresent());
+    assertEquals(transformation.getCompletionTime().get(), metadata.getCompletionTime().get());
+    assertEquals(
+        Duration.between(transformation.getStartTime(), transformation.getCompletionTime().get()),
+        transformation.getDuration());
+  }
+
+  @Test
+  public void succeedMetadataDoesNothingIfStreamFailedToClose() throws Exception {
+    Transformation transformation = manager.createTransform(currentUri, finalUri, metacardUri);
+    transformation.add(TEST_METADATA_TYPE);
+
+    MetadataTransformation metadata =
+        manager.get(transformation.getTransformId(), TEST_METADATA_TYPE);
+    String metadataContent = "testing";
+    String metadataContentType = "text/plain";
+    metadata.succeed(
+        metadataContentType,
+        new ByteArrayInputStream(metadataContent.getBytes()) {
+          @Override
+          public void close() throws IOException {
+            super.close();
+            throw new IOException("testing");
+          }
+        });
+
+    assertTrue(metadata.getContent().isPresent());
+    String actualMetadataContent = null;
+    try (final Reader reader = new InputStreamReader(metadata.getContent().get())) {
+      actualMetadataContent = CharStreams.toString(reader);
+    }
+    assertEquals(actualMetadataContent, metadataContent);
+    assertTrue(metadata.wasSuccessful());
+    assertTrue(metadata.getContentType().isPresent());
+    assertEquals(metadata.getContentType().get(), metadataContentType);
+    assertTrue(metadata.getContentLength().isPresent());
+    assertEquals(metadata.getContentLength().getAsLong(), 7);
+    assertTrue(metadata.getCompletionTime().isPresent());
+    assertTrue(transformation.getCompletionTime().isPresent());
+    assertEquals(transformation.getCompletionTime().get(), metadata.getCompletionTime().get());
+    assertEquals(
+        Duration.between(transformation.getStartTime(), transformation.getCompletionTime().get()),
+        transformation.getDuration());
+  }
+
+  @Test(expected = IllegalStateException.class)
+  public void testMetadataContentIsNoLongerAvailableWhenDeleted() throws Exception {
+    final Transformation transformation =
+        manager.createTransform(currentUri, finalUri, metacardUri);
+    final MetadataTransformation metadata = transformation.add(TEST_METADATA_TYPE);
+
+    metadata.succeed("text/plain", Charset.defaultCharset(), new StringReader("done"));
+    transformation.delete();
+
+    metadata.getContent();
+  }
+
+  @Test
   public void failMetadataCapturesState() throws Exception {
     Transformation transformation = manager.createTransform(currentUri, finalUri, metacardUri);
     transformation.add(TEST_METADATA_TYPE);
@@ -165,6 +273,9 @@ public class InMemoryTransformationManagerTest {
     assertTrue(metadata.getFailureMessage().isPresent());
     assertEquals(metadata.getFailureMessage().get(), message);
     assertTrue(metadata.getCompletionTime().isPresent());
+    assertFalse(metadata.getContent().isPresent());
+    assertFalse(metadata.getContentType().isPresent());
+    assertFalse(metadata.getContentLength().isPresent());
   }
 
   @Test(expected = IllegalStateException.class)
@@ -204,5 +315,79 @@ public class InMemoryTransformationManagerTest {
   @Test(expected = TransformationNotFoundException.class)
   public void deleteInvalidIdThrowsException() throws Exception {
     manager.delete("gibberish-ID");
+  }
+
+  @Test
+  public void testTransformationDelete() throws Exception {
+    final Transformation transformation =
+        manager.createTransform(currentUri, finalUri, metacardUri);
+    final MetadataTransformation metadata = transformation.add(TEST_METADATA_TYPE);
+
+    transformation.delete();
+
+    Assert.assertThat(transformation.isDeleted(), Matchers.equalTo(true));
+    Assert.assertThat(metadata.isDeleted(), Matchers.equalTo(true));
+  }
+
+  @Test
+  public void testTransformationDeleteFromManager() throws Exception {
+    final Transformation transformation =
+        manager.createTransform(currentUri, finalUri, metacardUri);
+    final MetadataTransformation metadata = transformation.add(TEST_METADATA_TYPE);
+
+    manager.delete(transformation.getTransformId());
+
+    Assert.assertThat(transformation.isDeleted(), Matchers.equalTo(true));
+    Assert.assertThat(metadata.isDeleted(), Matchers.equalTo(true));
+  }
+
+  @Test(expected = TransformationNotFoundException.class)
+  public void testTransformationDeleteIsNoLongerAccessibleFromManager() throws Exception {
+    final Transformation transformation =
+        manager.createTransform(currentUri, finalUri, metacardUri);
+
+    transformation.delete();
+
+    manager.get(transformation.getTransformId());
+  }
+
+  @Test
+  public void testTransformationDeletedTwiceHasNoEffect() throws Exception {
+    final Transformation transformation =
+        manager.createTransform(currentUri, finalUri, metacardUri);
+    final MetadataTransformation metadata = transformation.add(TEST_METADATA_TYPE);
+
+    transformation.delete();
+
+    transformation.delete();
+
+    Assert.assertThat(transformation.isDeleted(), Matchers.equalTo(true));
+    Assert.assertThat(metadata.isDeleted(), Matchers.equalTo(true));
+  }
+
+  @Test(expected = TransformationNotFoundException.class)
+  public void testTransformationDeletedTwiceFromManagerFailsTheSecondTime() throws Exception {
+    final Transformation transformation =
+        manager.createTransform(currentUri, finalUri, metacardUri);
+    final MetadataTransformation metadata = transformation.add(TEST_METADATA_TYPE);
+
+    manager.delete(transformation.getTransformId());
+
+    manager.delete(transformation.getTransformId());
+  }
+
+  @Test
+  public void testTransformationDeleteFromManagerThenDeletedFromObjectHasNoEffect()
+      throws Exception {
+    final Transformation transformation =
+        manager.createTransform(currentUri, finalUri, metacardUri);
+    final MetadataTransformation metadata = transformation.add(TEST_METADATA_TYPE);
+
+    manager.delete(transformation.getTransformId());
+
+    transformation.delete();
+
+    Assert.assertThat(transformation.isDeleted(), Matchers.equalTo(true));
+    Assert.assertThat(metadata.isDeleted(), Matchers.equalTo(true));
   }
 }

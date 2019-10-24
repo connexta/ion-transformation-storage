@@ -18,7 +18,6 @@ import com.connexta.transformation.commons.api.exceptions.TransformationExceptio
 import com.connexta.transformation.commons.api.exceptions.TransformationNotFoundException;
 import com.connexta.transformation.commons.api.status.MetadataTransformation;
 import com.connexta.transformation.commons.api.status.Transformation;
-import com.connexta.transformation.commons.inmemory.status.InMemoryTransformation;
 import java.net.URI;
 import java.util.HashMap;
 import java.util.Map;
@@ -30,13 +29,13 @@ import java.util.Map;
  * exact same "locations" as input.
  */
 public class InMemoryTransformationManager implements TransformationManager {
-  private final Map<String, Transformation> store = new HashMap<>();
+  private final Map<String, InMemoryTransformation> store = new HashMap<>();
 
   @Override
   public Transformation createTransform(
       URI currentLocation, URI finalLocation, URI metadataLocation) throws TransformationException {
-    Transformation transformation =
-        new InMemoryTransformation(currentLocation, finalLocation, metadataLocation);
+    InMemoryTransformation transformation =
+        new InMemoryTransformation(this, currentLocation, finalLocation, metadataLocation);
     store.put(transformation.getTransformId(), transformation);
     return transformation;
   }
@@ -55,24 +54,17 @@ public class InMemoryTransformationManager implements TransformationManager {
   @Override
   public MetadataTransformation get(String transformId, String metadataType)
       throws TransformationException {
-    return get(transformId)
-        .getMetadata(metadataType)
-        .orElseThrow(
-            () ->
-                new TransformationNotFoundException(
-                    "No ["
-                        + metadataType
-                        + "] metadata found for transformation ["
-                        + transformId
-                        + "]"));
+    return get(transformId).getMetadata(metadataType);
   }
 
   @Override
-  public void delete(String transformId) throws TransformationException {
-    Transformation transformation = store.remove(transformId);
+  public void delete(String transformId) throws TransformationNotFoundException {
+    final InMemoryTransformation transformation = store.remove(transformId);
+
     if (transformation == null) {
       throw new TransformationNotFoundException(
           "Transformation [" + transformId + "] cannot be found");
     }
+    transformation.wasDeleted();
   }
 }

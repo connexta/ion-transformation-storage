@@ -18,10 +18,21 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.when;
 
 import com.connexta.transformation.commons.api.status.TransformationStatus.State;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Optional;
+import org.hamcrest.Matchers;
+import org.junit.Assert;
 import org.junit.Test;
 import org.mockito.Mockito;
 
 public class TransformationStatusTest {
+  private static final long ELAPSED = 5000L;
+  private static final Instant START_TIME =
+      Instant.now().minusMillis(TransformationStatusTest.ELAPSED);
+  private static final long DURATION = 23456L;
+  private static final Instant COMPLETION_TIME =
+      TransformationStatusTest.START_TIME.plusMillis(TransformationStatusTest.DURATION);
 
   private TransformationStatus status;
 
@@ -83,6 +94,34 @@ public class TransformationStatusTest {
   public void isUnknownFalse() {
     status = mockTransformationStatus(State.FAILED);
     assertFalse(status.isUnknown());
+  }
+
+  @Test
+  public void testGetDurationWhenCompleted() throws Exception {
+    status = mockTransformationStatus(State.SUCCESSFUL);
+    when(status.getStartTime()).thenReturn(TransformationStatusTest.START_TIME);
+    when(status.getCompletionTime())
+        .thenReturn(Optional.of(TransformationStatusTest.COMPLETION_TIME));
+
+    Assert.assertThat(
+        status.getDuration(),
+        Matchers.equalTo(Duration.ofMillis(TransformationStatusTest.DURATION)));
+  }
+
+  @Test
+  public void testGetDurationWhenNotCompleted() throws Exception {
+    status = mockTransformationStatus(State.IN_PROGRESS);
+    when(status.getStartTime()).thenReturn(TransformationStatusTest.START_TIME);
+    when(status.getCompletionTime()).thenReturn(Optional.empty());
+    final long now = System.currentTimeMillis();
+
+    final long duration = status.getDuration().toMillis();
+
+    // the clock keeps moving so we can only ensure we are close to the target
+    Assert.assertThat(
+        duration,
+        Matchers.lessThanOrEqualTo(now - TransformationStatusTest.START_TIME.toEpochMilli()));
+    Assert.assertThat(duration, Matchers.greaterThan(TransformationStatusTest.ELAPSED));
   }
 
   // lets us use Mocktio.CALLS_REAL_METHODS which will call the implemented methods and mock others
