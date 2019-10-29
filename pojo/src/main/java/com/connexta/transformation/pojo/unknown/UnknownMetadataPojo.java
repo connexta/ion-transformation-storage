@@ -22,8 +22,8 @@ import com.fasterxml.jackson.annotation.JsonTypeName;
 /**
  * This class provides a pojo implementation for unknown request information objects and is used for
  * forward compatibility where the current code might not be able to understand a new type of
- * resource information. In such case, Jackson would map this new type of request information object
- * to this class.
+ * resource information. In such case, Jackson would map this new type of request metadata object to
+ * this class.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(Include.NON_NULL)

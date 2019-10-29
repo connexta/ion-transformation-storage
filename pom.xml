@@ -119,7 +119,7 @@
                 <version>${mockito-core.version}</version>
                 <scope>test</scope>
             </dependency>
-            <dependency>
+            <dependency> <!-- Required for mockito-core to work with Java 11 -->
                 <groupId>net.bytebuddy</groupId>
                 <artifactId>byte-buddy</artifactId>
                 <version>${byte-buddy.version}</version>
