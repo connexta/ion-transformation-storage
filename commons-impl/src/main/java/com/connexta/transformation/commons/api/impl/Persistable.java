@@ -38,11 +38,11 @@ public abstract class Persistable<P extends Pojo> {
    * Instantiates a new persistable corresponding to a new object that do not yet exist in the
    * database.
    *
-   * @param type a string representing the type of this object (used when generating exception or
-   *     logs)
+   * @param persistableType a string representing the type of this object (used when generating
+   *     exception or logs)
    */
-  protected Persistable(String type) {
-    this(type, UUID.randomUUID().toString());
+  protected Persistable(String persistableType) {
+    this(persistableType, UUID.randomUUID().toString());
   }
 
   /**
@@ -76,6 +76,9 @@ public abstract class Persistable<P extends Pojo> {
 
   /**
    * Checks if this persistable object contains unknown information.
+   *
+   * <p><i>Note:</i> The default implementation provided here will always return <code>false</code>.
+   * Subclasses should override this method as required.
    *
    * @return <code>true</code> if it contains unknown info; <code>false</code> otherwise
    */

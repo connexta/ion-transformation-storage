@@ -35,7 +35,14 @@ import javax.annotation.Nullable;
  * from persistence. It also provides the capability of persisting back the fields based on the
  * latest version format.
  */
-@JsonPropertyOrder({"id", "version", "finalLocation", "currentLocation", "metadataLocation"})
+@JsonPropertyOrder({
+  "clazz",
+  "id",
+  "version",
+  "final_location",
+  "current_location",
+  "metacard_location"
+})
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(Include.NON_NULL)
 @JsonTypeInfo(
