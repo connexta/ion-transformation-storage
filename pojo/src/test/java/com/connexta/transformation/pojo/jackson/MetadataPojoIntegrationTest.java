@@ -32,8 +32,8 @@ public class MetadataPojoIntegrationTest {
   private static final int VERSION = 1;
   private static final String ID = "1234";
   private static final String TRANSFORM_ID = "9991234";
-  private static final Instant START_TIME = Instant.now();
-  private static final Instant COMPLETION_TIME = Instant.now().plusSeconds(30L);
+  private static final Instant START_TIME = Instant.ofEpochMilli(10L);
+  private static final Instant COMPLETION_TIME = Instant.ofEpochMilli(30L);
   private static final String STATE = TransformationStatus.State.IN_PROGRESS.name();
   private static final String TYPE = "irm";
   private static final String CONTENT_TYPE = "application/xml";

@@ -65,9 +65,7 @@ public interface TransformationStatus {
    *
    * @return the duration of the transformation.
    */
-  default Duration getDuration() {
-    return Duration.between(getStartTime(), getCompletionTime().orElseGet(Instant::now));
-  }
+  Duration getDuration();
 
   /**
    * Checks if the associated transformation has been deleted.
